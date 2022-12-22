@@ -1,5 +1,5 @@
 
-name: Build Annie (MSVC)
+name: Build Annie
 
 on:
   pull_request:
@@ -10,7 +10,7 @@ on:
       - master
   workflow_dispatch:
     inputs:
-      target-ref:
+      ref:
         description: "Branch/tag/commit to build"
         required: true
         type: string
@@ -30,59 +30,74 @@ jobs:
         target:
           - x86_64-pc-windows-msvc
     steps:
+      - name: Set ref
+        run: |
+          echo "REF=${{ inputs.ref || github.ref }}" >> $GITHUB_ENV
+
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          ref: ${{ inputs.target-ref }}
+          ref: ${{ env.REF }}
+
       - name: Print git status
         run: |
           git status
-      - name: Create global cargo dirs
-        run: |
-          mkdir -p "~/.cargo/registry"
-          mkdir -p "~/.cargo/git"
-      - name: Set environment variables for the build
+
+      - name: Set environment variables
         run: |
           echo "~/.cargo/bin" >> $GITHUB_PATH
-          echo "TARGET=${{ matrix.target }}" >> $GITHUB_ENV
+          echo "SHA=$(git rev-parse $REF)" >> $GITHUB_ENV
+
       - name: Cache cargo registry and git trees
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
+          key: cargo-global-${{ runner.os }}
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Get rustc commit hash
-        id: cargo-target-cache
-        run: |
-          echo "::set-output name=rust_hash::$(rustc -Vv | grep commit-hash | awk '{print $2}')"
-        shell: bash
-      - name: Cache cargo build
-        uses: actions/cache@v2
-        with:
-          path: target
-          key: ${{ github.base_ref }}-${{ github.head_ref }}-${{ matrix.target }}-cargo-target-dir-${{ steps.cargo-target-cache.outputs.rust_hash }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ github.base_ref }}-${{ matrix.target }}-cargo-target-dir-${{ steps.cargo-target-cache.outputs.rust_hash }}-${{ hashFiles('**/Cargo.lock') }}
-      - name: Install Rustup using win.rustup.rs
+
+      - name: Install Rust via rustup
         run: |
           curl https://win.rustup.rs/ --silent --output rustup-init.exe
           ./rustup-init.exe -y --default-host=x86_64-pc-windows-msvc --profile=minimal
           rm rustup-init.exe
-      - name: Ensure stable toolchain is up to date
-        run: rustup update stable
-      - name: Install the target
-        run: rustup target install ${{ matrix.target }}
+
+      - name: Update stable toolchain
+        run: |
+          rustup update stable
+
+      - name: Install toolchain target
+        run: |
+          rustup target install ${{ matrix.target }}
+
+      - name: Get rust toolchain SHA
+        run: |
+          echo "RUST_SHA=$(rustc -Vv | grep commit-hash | awk '{print $2}')" >> $GITHUB_ENV
+
+      - name: Cache cargo build folder
+        uses: actions/cache@v3
+        with:
+          key: cargo-target-dir-${{ env.SHA }}-${{ matrix.target }}-${{ env.RUST_SHA }}
+          path: target
+
       - name: Run a full build
-        run: cargo build --release
+        run: |
+          cargo +stable-${{ matrix.target }} build --release
+
+      - name: Get package semver
+        run: |
+          cat Cargo.toml | sed -rn 's/^\s*version\s*=\s*"(.*?)"/SEMVER=\1/p' >> $GITHUB_ENV
+
       - name: Upload the built artifact
         uses: actions/upload-artifact@v3
         with:
-          name: annie-${{ github.sha }}
+          name: annie-${{ env.SEMVER }}-${{ matrix.target }}-${{ env.SHA }}
           path: |
             target/release/annie-am.exe
           retention-days: 7
-      - name: Clear the cargo caches
+
+      - name: Clear cargo cache
         run: |
           cargo install cargo-cache --no-default-features --features ci-autoclean
           cargo-cache
