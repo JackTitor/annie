@@ -28,8 +28,20 @@ vergen = {version = "7.4.3", default_features = false, features = ["build", "car
 winres = "0.1.12"
 
 [profile.release]
-codegen-units = 1
 lto = true
+codegen-units = 1
+
+[profile.release-unoptimized]
+inherits = "release"
+opt-level = 0
+lto = false
+codegen-units = 256
+incremental = true
+
+[profile.release-no-lto]
+inherits = "release"
+lto = false
+codegen-units = 16
 
 [[bin]]
 name = "annie-am"

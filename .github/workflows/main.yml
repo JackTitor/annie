@@ -14,6 +14,16 @@ on:
         description: "Branch/tag/commit to build"
         required: true
         type: string
+        default: master
+      cargo-profile:
+        description: "Cargo profile for build"
+        required: true
+        type: choice
+        default: release
+        options:
+          - release-unoptimized
+          - release-no-lto
+          - release
 
 jobs:
   build:
@@ -44,9 +54,10 @@ jobs:
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
           echo "~/bin" >> $GITHUB_PATH
 
-      - name: Set ref
+      - name: Parse inputs
         run: |
           echo "REF=${{ inputs.ref || github.ref }}" >> $GITHUB_ENV
+          echo "CARGO_PROFILE=${{ inputs.cargo-profile || 'release' }}" >> $GITHUB_ENV
 
       - name: Checkout code
         uses: actions/checkout@v3
@@ -54,14 +65,10 @@ jobs:
           fetch-depth: 0
           ref: ${{ env.REF }}
 
-      - name: Print git status
-        run: |
-          git status
-
       - name: Set environment variables
         run: |
           echo "~/.cargo/bin" >> $GITHUB_PATH
-          echo "SHA=$(git rev-parse $REF)" >> $GITHUB_ENV
+          echo "SHA=$(git rev-parse ${{ env.REF }})" >> $GITHUB_ENV
 
       - name: Cache cargo registry, git trees, and sccache
         uses: actions/cache@v3
@@ -98,7 +105,7 @@ jobs:
 
       - name: Run a full build
         run: |
-          cargo +stable-${{ matrix.target }} build --release
+          cargo +stable-${{ matrix.target }} build --profile=${{ env.CARGO_PROFILE }}
 
       - name: Get package semver
         run: |
@@ -107,9 +114,9 @@ jobs:
       - name: Upload the built artifact
         uses: actions/upload-artifact@v3
         with:
-          name: annie-${{ env.SEMVER }}-${{ matrix.target }}-${{ env.SHA }}
+          name: annie-${{ env.SEMVER }}-${{ env.CARGO_PROFILE }}-${{ matrix.target }}-${{ env.SHA }}
           path: |
-            target/release/annie-am.exe
+            target/${{ env.CARGO_PROFILE }}/annie-am.exe
           retention-days: 7
 
       - name: Clear cargo cache
