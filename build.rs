@@ -13,13 +13,15 @@ fn main() {
         .warnings_into_errors(true)
         .compile("mute_control");
 
-    // compile resources
+    // embed program icon (only on msvc toolchain)
 
-    println!("cargo:rerun-if-changed=resource/annie-main.ico");
-    WindowsResource::new()
-        .set_icon("resource/annie-main.ico")
-        .compile()
-        .unwrap();
+    if cfg!(target_env = "msvc") {
+        println!("cargo:rerun-if-changed=resource/annie-main.ico");
+        WindowsResource::new()
+            .set_icon("resource/annie-main.ico")
+            .compile()
+            .unwrap();
+    }
 
     // generate build info
 

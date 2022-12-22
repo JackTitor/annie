@@ -254,8 +254,9 @@ impl AnnieCore {
     fn show_about(&self) {
         thread::spawn(|| {
             let body = format!(
-                "Annie Automuter\n\nVersion: {}\nBuild date: {}\nProfile: {}",
+                "Annie Automuter\n\nVersion: {}\nPlatform: {}\nBuild date: {}\nProfile: {}",
                 env!("VERGEN_BUILD_SEMVER"),
+                env!("VERGEN_CARGO_TARGET_TRIPLE"),
                 env!("VERGEN_BUILD_DATE"),
                 env!("VERGEN_CARGO_PROFILE")
             );

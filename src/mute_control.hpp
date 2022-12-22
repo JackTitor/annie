@@ -1,7 +1,5 @@
 #pragma once
 
-typedef unsigned long DWORD;
-typedef long HRESULT;
-typedef int BOOL;
+#include <windef.h>
 
 extern "C" HRESULT SetApplicationMute(DWORD pid, BOOL mute);

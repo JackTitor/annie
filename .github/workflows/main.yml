@@ -30,7 +30,7 @@ jobs:
     name: Build
     runs-on: windows-latest
     env:
-      RUSTFLAGS: -Ctarget-feature=+crt-static
+      RUSTFLAGS: -C target-feature=+crt-static
     defaults:
       run:
         shell: bash
@@ -39,7 +39,13 @@ jobs:
       matrix:
         target:
           - x86_64-pc-windows-msvc
+          - x86_64-pc-windows-gnu
     steps:
+      - name: Parse inputs
+        run: |
+          echo "REF=${{ inputs.ref || github.ref }}" >> $GITHUB_ENV
+          echo "CARGO_PROFILE=${{ inputs.cargo-profile || 'release' }}" >> $GITHUB_ENV
+
       - name: Install sccache
         env:
           GH_TOKEN: ${{ github.token }}
@@ -53,11 +59,6 @@ jobs:
           echo "SCCACHE_DIR=$(cygpath --windows ~/.sccache)" >> $GITHUB_ENV
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
           echo "~/bin" >> $GITHUB_PATH
-
-      - name: Parse inputs
-        run: |
-          echo "REF=${{ inputs.ref || github.ref }}" >> $GITHUB_ENV
-          echo "CARGO_PROFILE=${{ inputs.cargo-profile || 'release' }}" >> $GITHUB_ENV
 
       - name: Checkout code
         uses: actions/checkout@v3
@@ -73,7 +74,7 @@ jobs:
       - name: Cache cargo registry, git trees, and sccache
         uses: actions/cache@v3
         with:
-          key: cargo-global-${{ runner.os }}
+          key: cargo-global-${{ matrix.target }}
           path: |
             ~/.cargo/registry
             ~/.cargo/git
@@ -87,11 +88,7 @@ jobs:
 
       - name: Update stable toolchain
         run: |
-          rustup update stable
-
-      - name: Install toolchain target
-        run: |
-          rustup target install ${{ matrix.target }}
+          rustup update stable-${{ matrix.target }}
 
       - name: Get rust toolchain SHA
         run: |
@@ -114,7 +111,7 @@ jobs:
       - name: Upload the built artifact
         uses: actions/upload-artifact@v3
         with:
-          name: annie-${{ env.SEMVER }}-${{ env.CARGO_PROFILE }}-${{ matrix.target }}-${{ env.SHA }}
+          name: annie-${{ env.SEMVER }}-${{ matrix.target }}-${{ env.CARGO_PROFILE }}
           path: |
             target/${{ env.CARGO_PROFILE }}/annie-am.exe
           retention-days: 7
