@@ -8,6 +8,12 @@ on:
   push:
     branches:
       - master
+  workflow_dispatch:
+    inputs:
+      target-ref:
+        description: "Branch/tag/commit to build"
+        required: true
+        type: string
 
 jobs:
   build:
@@ -24,10 +30,12 @@ jobs:
         target:
           - x86_64-pc-windows-msvc
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - name: Display git status
+          ref: ${{ inputs.target-ref }}
+      - name: Print git status
         run: |
           git status
       - name: Create global cargo dirs
