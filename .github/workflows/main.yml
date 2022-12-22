@@ -30,6 +30,20 @@ jobs:
         target:
           - x86_64-pc-windows-msvc
     steps:
+      - name: Install sccache
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=$(gh --repo mozilla/sccache release list | grep Latest | awk '{print $3}')
+          gh --repo mozilla/sccache release download --pattern 'sccache-*-x86_64-pc-windows-msvc.tar.gz' $TAG
+          tar -xf sccache-*.tar.gz
+          mkdir -p ~/bin
+          mv $(find -name sccache.exe) ~/bin/
+          rm -rf sccache-*
+          echo "SCCACHE_DIR=$(cygpath --windows ~/.sccache)" >> $GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "~/bin" >> $GITHUB_PATH
+
       - name: Set ref
         run: |
           echo "REF=${{ inputs.ref || github.ref }}" >> $GITHUB_ENV
@@ -49,13 +63,14 @@ jobs:
           echo "~/.cargo/bin" >> $GITHUB_PATH
           echo "SHA=$(git rev-parse $REF)" >> $GITHUB_ENV
 
-      - name: Cache cargo registry and git trees
+      - name: Cache cargo registry, git trees, and sccache
         uses: actions/cache@v3
         with:
           key: cargo-global-${{ runner.os }}
           path: |
             ~/.cargo/registry
             ~/.cargo/git
+            ~/.sccache
 
       - name: Install Rust via rustup
         run: |
