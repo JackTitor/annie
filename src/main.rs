@@ -12,10 +12,13 @@ use std::{env, fs::File, panic, path::PathBuf, sync::mpsc};
 use log::{info, LevelFilter};
 use msgbox::IconType;
 use simplelog::{ColorChoice, Config, TermLogger, TerminalMode, WriteLogger};
+use single_instance::SingleInstance;
 
 use crate::core::AnnieCore;
 
 fn main() {
+    let Some(_instance_lock) = get_instance_lock() else { return };
+
     set_panic_hook();
     setup_logger();
 
@@ -30,6 +33,19 @@ fn main() {
     AnnieCore::run_with_config(config_path, core_receiver, tray_sender, listener_thread);
 
     info!("Annie exit");
+}
+
+fn get_instance_lock() -> Option<SingleInstance> {
+    let instance = SingleInstance::new("annie-da43c2e0bb1f724e650535165731ecac").unwrap();
+
+    if !instance.is_single() {
+        std::mem::drop(instance);
+        msgbox::create("Annie", "Annie is already running.", IconType::Info).ok();
+
+        None
+    } else {
+        Some(instance)
+    }
 }
 
 fn get_data_dir() -> PathBuf {
