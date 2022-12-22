@@ -79,13 +79,16 @@ jobs:
           echo "~/.cargo/bin" >> $GITHUB_PATH
           echo "SHA=$(git rev-parse ${{ env.REF }})" >> $GITHUB_ENV
 
-      - name: Cache cargo registry, git trees, and sccache
+      - name: Cache cargo registry, git trees, installed apps, and sccache
         uses: actions/cache@v3
         with:
           key: cargo-global-${{ matrix.target }}
           path: |
             ~/.cargo/registry
             ~/.cargo/git
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+            ~/.cargo/bin/cargo-cache.exe
             ~/.sccache
 
       - name: Install Rust via rustup
