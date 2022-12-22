@@ -24,6 +24,14 @@ on:
           - release-unoptimized
           - release-no-lto
           - release
+      compress-exe:
+        description: "Compress executable with UPX"
+        required: true
+        type: choice
+        default: false
+        options:
+          - true
+          - false
 
 jobs:
   build:
@@ -50,12 +58,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG=$(gh --repo mozilla/sccache release list | grep Latest | awk '{print $3}')
-          gh --repo mozilla/sccache release download --pattern 'sccache-*-x86_64-pc-windows-msvc.tar.gz' $TAG
-          tar -xf sccache-*.tar.gz
+          TAG=$(gh --repo mozilla/sccache release list | grep Latest | awk '{print $(NF - 1)}')
+          gh --repo mozilla/sccache release download --pattern 'sccache-*-x86_64-pc-windows-msvc.zip' $TAG
+          unzip sccache-*.zip
           mkdir -p ~/bin
           mv $(find -name sccache.exe) ~/bin/
-          rm -rf sccache-*
+          rm -rf sccache*
           echo "SCCACHE_DIR=$(cygpath --windows ~/.sccache)" >> $GITHUB_ENV
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
           echo "~/bin" >> $GITHUB_PATH
@@ -104,6 +112,17 @@ jobs:
         run: |
           cargo +stable-${{ matrix.target }} build --profile=${{ env.CARGO_PROFILE }}
 
+      - name: Compress executable
+        if: ${{ inputs.compress-exe }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=$(gh --repo upx/upx release list | grep Latest | awk '{print $(NF - 1)}')
+          gh --repo upx/upx release download --pattern 'upx-*-win64.zip' $TAG
+          unzip upx-*-win64.zip
+          $(find -name upx.exe) target/${{ env.CARGO_PROFILE }}/annie-am.exe
+          rm -rf upx*
+
       - name: Get package semver
         run: |
           cat Cargo.toml | sed -rn 's/^\s*version\s*=\s*"(.*?)"/SEMVER=\1/p' >> $GITHUB_ENV
@@ -111,7 +130,7 @@ jobs:
       - name: Upload the built artifact
         uses: actions/upload-artifact@v3
         with:
-          name: annie-${{ env.SEMVER }}-${{ matrix.target }}-${{ env.CARGO_PROFILE }}
+          name: annie-${{ env.SEMVER }}-${{ matrix.target }}-${{ env.CARGO_PROFILE }}${{ inputs.compress-exe && '-compressed' || '' }}
           path: |
             target/${{ env.CARGO_PROFILE }}/annie-am.exe
           retention-days: 7
