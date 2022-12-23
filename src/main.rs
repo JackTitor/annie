@@ -32,7 +32,7 @@ fn main() {
 
     AnnieCore::run_with_config(config_path, core_receiver, tray_sender, listener_thread);
 
-    info!("Annie exit");
+    info!("Annie exit"); // TODO: This is not reached - why?
 }
 
 fn get_instance_lock() -> Option<SingleInstance> {

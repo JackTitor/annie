@@ -27,7 +27,7 @@ use winapi::{
 
 use crate::{
     config::AnnieConfig,
-    mute_control,
+    mute_control::MuteProxy,
     tray_application::{TrayEvent, TraySender},
     window::Window,
     window_listener::WindowListenerHandle,
@@ -55,6 +55,7 @@ pub struct AnnieCore {
     receiver: Receiver<CoreMessage>,
     tray_sender: TraySender,
     listener_thread: Option<WindowListenerHandle>,
+    mute_proxy_: Option<MuteProxy>,
 }
 
 impl AnnieCore {
@@ -71,6 +72,7 @@ impl AnnieCore {
             receiver,
             tray_sender,
             listener_thread: Some(listener_thread),
+            mute_proxy_: Some(MuteProxy::new()),
         };
 
         if !config_path.as_ref().exists() {
@@ -91,12 +93,23 @@ impl AnnieCore {
             }
         }
 
-        // close & join listener thread
+        // join listener thread
         core.listener_thread
             .take()
             .expect("listener thread is empty")
             .join()
             .expect("cannot join listener thread");
+
+        // join mute proxy
+        core.mute_proxy_
+            .take()
+            .expect("")
+            .join()
+            .expect("cannot join mute proxy");
+    }
+
+    fn mute_proxy(&self) -> &MuteProxy {
+        self.mute_proxy_.as_ref().expect("mute proxy is missing")
     }
 
     fn is_managed(&self, program_path: &ProgramPath) -> bool {
@@ -112,7 +125,7 @@ impl AnnieCore {
             CoreMessage::NewForegroundWindow(hwnd) => self.handle_new_window(hwnd),
             CoreMessage::SetEnabledGlobal(enabled) => self.set_enabled_global(enabled),
             CoreMessage::SetEnabledApp(app_name, enabled) => {
-                self.set_enabled_app(app_name, enabled);
+                self.set_managed_app(app_name, enabled);
             }
             CoreMessage::OpenConfig => self.open_config(),
             CoreMessage::ReloadConfig => self.reload_config(),
@@ -130,28 +143,44 @@ impl AnnieCore {
             Err(_) => return,
         };
 
-        debug!("Old foreground window: {:?}", &self.foreground_window);
-
-        let program_path_old = self.foreground_window.as_ref().map(|win| &win.program_path);
-        let pid_old = self.foreground_window.as_ref().map(|win| win.pid);
+        let window_old =
+            self.foreground_window
+                .replace(match Window::new_from_hwnd(hwnd as HWND) {
+                    Ok(w) => w,
+                    Err(_) => return,
+                });
+        let (pid_old, program_path_old) = match window_old {
+            Some(Window {
+                hwnd: _,
+                pid,
+                program_path,
+            }) => (Some(pid), Some(program_path)),
+            None => (None, None),
+        };
         let is_managed_old = program_path_old
+            .as_ref()
             .map(|path| self.is_managed(path))
             .unwrap_or(false);
+
         let is_managed_new = self.is_managed(&window_new.program_path);
+
+        // mute old window, unmute new window (if managed)
 
         if self.config.enabled && pid_old != Some(window_new.pid) {
             if is_managed_old {
                 if let Some(pid_old) = pid_old {
-                    mute_control::set_mute(pid_old, true);
+                    self.mute_proxy().mute(pid_old);
                 }
             }
 
             if is_managed_new {
-                mute_control::set_mute(window_new.pid, false);
+                self.mute_proxy().unmute(window_new.pid, true);
             }
         }
 
-        if Some(&window_new.program_path) != program_path_old {
+        // if the program has changed, send as recent program to tray
+
+        if Some(&window_new.program_path) != program_path_old.as_ref() {
             self.tray_sender
                 .send_event(TrayEvent::AddRecentApp(
                     window_new.program_path.clone(),
@@ -180,29 +209,29 @@ impl AnnieCore {
         }
     }
 
-    fn set_enabled_app(&mut self, program_path: ProgramPath, enable: bool) {
-        if enable && self.config.managed_apps.insert(program_path.clone()) {
+    fn set_managed_app(&mut self, program_path: ProgramPath, managed: bool) {
+        if managed && self.config.managed_apps.insert(program_path.clone()) {
+            // update mute status on all processes with this path
             info!("Added {} to managed apps", &program_path);
 
-            // if this is the foreground process, mute it
-            if let Some(window) = self.foreground_window.as_ref() {
-                if window.program_path == program_path {
-                    mute_control::set_mute(window.pid, true);
+            let foreground_pid = self.foreground_window.as_ref().map(|w| w.pid);
+
+            for pid in Self::get_pids_from_path(&program_path) {
+                if Some(pid) == foreground_pid {
+                    self.mute_proxy().unmute(pid, false);
+                } else {
+                    self.mute_proxy().mute(pid);
                 }
             }
-
-            self.save_config();
-        } else if self.config.managed_apps.remove(&program_path) {
+        } else if !managed && self.config.managed_apps.remove(&program_path) {
+            // unmute every process with this path
             info!("Removed {} from managed apps", &program_path);
-
-            // mute/unmute every process with this path
-            let foreground_pid = self.foreground_window.as_ref().map(|win| win.pid);
             for pid in Self::get_pids_from_path(&program_path) {
-                mute_control::set_mute(pid, Some(pid) != foreground_pid);
+                self.mute_proxy().unmute(pid, false);
             }
-
-            self.save_config();
         }
+
+        self.save_config();
     }
 
     fn open_config(&self) {
@@ -247,7 +276,7 @@ impl AnnieCore {
         pids.dedup();
 
         for pid in pids {
-            mute_control::set_mute(pid, false);
+            self.mute_proxy().unmute(pid, false)
         }
     }
 
@@ -273,8 +302,11 @@ impl AnnieCore {
         let pids = all_windows.into_iter().map(|w| w.pid);
 
         for pid in pids {
-            let mute = Some(pid) != foreground_pid;
-            mute_control::set_mute(pid, mute);
+            if Some(pid) == foreground_pid {
+                self.mute_proxy().unmute(pid, false);
+            } else {
+                self.mute_proxy().mute(pid);
+            }
         }
     }
 
