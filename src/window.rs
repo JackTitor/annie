@@ -13,6 +13,7 @@ use winapi::{
         windef::HWND,
     },
     um::{
+        handleapi::CloseHandle,
         processthreadsapi::OpenProcess,
         winbase::QueryFullProcessImageNameW,
         winnt::PROCESS_QUERY_INFORMATION,
@@ -100,6 +101,7 @@ impl Window {
             let mut path_buf = [0u16; 1024];
             let mut buf_size: DWORD = 1024;
             let ok = QueryFullProcessImageNameW(hproc, 0, path_buf.as_mut_ptr(), &mut buf_size);
+            CloseHandle(hproc);
             if ok == FALSE {
                 Err(Win32Error::get_last_error())?;
             }

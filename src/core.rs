@@ -14,7 +14,7 @@ use unicase::UniCase;
 use winapi::{
     shared::{minwindef::DWORD, windef::HWND},
     um::{
-        handleapi::INVALID_HANDLE_VALUE,
+        handleapi::{CloseHandle, INVALID_HANDLE_VALUE},
         processthreadsapi::OpenProcess,
         tlhelp32::{
             CreateToolhelp32Snapshot, Process32First, Process32Next, PROCESSENTRY32,
@@ -307,6 +307,7 @@ impl AnnieCore {
                 if ok > 0 && target_path == process_path_buf[..(buf_size as _)] {
                     pids.push(process_entry.th32ProcessID);
                 }
+                CloseHandle(handle);
                 hresult = Process32Next(snapshot, &mut process_entry);
             }
 
