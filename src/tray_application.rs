@@ -1,5 +1,7 @@
 use std::{
+    borrow::Cow,
     collections::{HashSet, VecDeque},
+    iter,
     path::Path,
     sync::mpsc::{self},
     thread::{self, JoinHandle},
@@ -53,15 +55,10 @@ fn update_tray_app(tray_app: &mut TrayIcon<TrayEvent>, tray_state: &TrayState) {
     // recent apps submenu
 
     let mut recent_apps_menu = MenuBuilder::new();
-    for (index, (app_name, app_active)) in tray_state.recent_apps.iter().enumerate() {
-        let short_name = Path::new(app_name.as_str())
-            .file_stem()
-            .unwrap()
-            .to_str()
-            .unwrap();
 
+    for (index, (app_path, app_active)) in tray_state.recent_apps.iter().enumerate() {
         recent_apps_menu = recent_apps_menu.checkable(
-            &format!("{} | {}", short_name, app_name),
+            &get_app_tray_text(app_path),
             *app_active,
             TrayEvent::ToggleProgram(index),
         );
@@ -99,6 +96,35 @@ fn update_tray_app(tray_app: &mut TrayIcon<TrayEvent>, tray_state: &TrayState) {
             false => "Annie (disabled)",
         })
         .expect("cannot update tray tooltip");
+}
+
+fn get_app_name(app_path: &str) -> Cow<str> {
+    let name = Path::new(app_path)
+        .file_stem()
+        .and_then(|n| n.to_str())
+        .expect("cannot extract program name from path");
+
+    let first = name
+        .chars()
+        .next()
+        .expect("cannot extract first character from program name");
+
+    if Iterator::eq(first.to_uppercase(), iter::once(first)) {
+        Cow::Borrowed(name)
+    } else {
+        let split = name
+            .char_indices()
+            .map(|(i, _)| i)
+            .skip(1)
+            .next()
+            .unwrap_or(name.len());
+
+        Cow::Owned(format!("{}{}", first.to_uppercase(), &name[split..]))
+    }
+}
+
+fn get_app_tray_text(app_path: &str) -> String {
+    format!("{} ({})", get_app_name(app_path), app_path)
 }
 
 pub fn create_tray_thread(core_sender: CoreSender) -> (JoinHandle<()>, TraySender) {
@@ -163,34 +189,34 @@ pub fn create_tray_thread(core_sender: CoreSender) -> (JoinHandle<()>, TraySende
                                 .resize(max_recent_apps, Default::default());
                         }
 
-                        for (app_name, app_enabled) in &mut tray_state.recent_apps {
-                            *app_enabled = managed_apps.contains(app_name);
+                        for (app_path, app_enabled) in &mut tray_state.recent_apps {
+                            *app_enabled = managed_apps.contains(app_path);
                         }
 
                         update_tray_app(&mut tray_app, &tray_state);
                     }
                     TrayEvent::ToggleProgram(app_index) => {
-                        let (app_name, app_active) = &mut tray_state.recent_apps[app_index];
+                        let (app_path, app_active) = &mut tray_state.recent_apps[app_index];
 
                         *app_active = !*app_active;
 
                         core_sender
-                            .send(CoreMessage::SetEnabledApp(app_name.clone(), *app_active))
+                            .send(CoreMessage::SetEnabledApp(app_path.clone(), *app_active))
                             .map_err(|err| error!("Cannot send to core: {}", err))
                             .ok();
 
                         update_tray_app(&mut tray_app, &tray_state);
                     }
-                    TrayEvent::AddRecentApp(app_name, app_active) => {
+                    TrayEvent::AddRecentApp(app_path, app_active) => {
                         let recent = &mut tray_state.recent_apps;
 
                         if let Some((index, _)) =
-                            recent.iter().find_position(|(path, _)| path == &app_name)
+                            recent.iter().find_position(|(path, _)| path == &app_path)
                         {
                             recent.remove(index);
                         }
 
-                        recent.push_front((app_name, app_active));
+                        recent.push_front((app_path, app_active));
 
                         if recent.len() > tray_state.max_recent_apps {
                             recent.pop_back();

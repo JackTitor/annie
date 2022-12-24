@@ -180,7 +180,9 @@ impl AnnieCore {
 
         // if the program has changed, send as recent program to tray
 
-        if Some(&window_new.program_path) != program_path_old.as_ref() {
+        if !window_new.program_path.starts_with("C:\\Windows\\")
+            && Some(&window_new.program_path) != program_path_old.as_ref()
+        {
             self.tray_sender
                 .send_event(TrayEvent::AddRecentApp(
                     window_new.program_path.clone(),
