@@ -1,5 +1,5 @@
-
 name: Build Annie
+run-name: ${{ inputs.ref && format('Manual run ({0}, {1}, {2})', inputs.ref, inputs.cargo-profile, inputs.compress-exe == 'none' && 'uncompressed' || 'compressed') }}
 
 on:
   pull_request:
