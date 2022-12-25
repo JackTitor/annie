@@ -109,7 +109,10 @@ jobs:
       - name: Cache cargo build folder
         uses: actions/cache@v3
         with:
-          key: cargo-target-dir-${{ env.SHA }}-${{ matrix.target }}-${{ env.RUST_SHA }}
+          key: cargo-target-dir-${{ matrix.target }}-${{ env.CARGO_PROFILE }}-${{ env.SHA }}
+          restore-keys: |
+            cargo-target-dir-${{ matrix.target }}-${{ env.CARGO_PROFILE }}
+            cargo-target-dir-${{ matrix.target }}
           path: target
 
       - name: Run a full build
