@@ -28,7 +28,7 @@ fn main() {
     let (_tray_thread, tray_sender) = tray_application::create_tray_thread(core_sender.clone());
     let listener_thread = window_listener::WindowListenerHandle::spawn(core_sender);
 
-    let config_path = get_data_dir().join("annie.json");
+    let config_path = get_data_dir().join("annie.toml");
 
     AnnieCore::run_with_config(config_path, core_receiver, tray_sender, listener_thread);
 

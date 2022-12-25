@@ -115,8 +115,7 @@ fn get_app_name(app_path: &str) -> Cow<str> {
         let split = name
             .char_indices()
             .map(|(i, _)| i)
-            .skip(1)
-            .next()
+            .nth(1)
             .unwrap_or(name.len());
 
         Cow::Owned(format!("{}{}", first.to_uppercase(), &name[split..]))

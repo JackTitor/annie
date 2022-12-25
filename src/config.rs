@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fs::File, path::Path};
+use std::{collections::HashSet, fs, path::Path};
 
 use serde::{Deserialize, Serialize};
 
@@ -52,14 +52,14 @@ impl AnnieConfig {
     }
 
     pub fn load_from_file(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let file = File::open(path)?;
-        let config = serde_json::from_reader(file)?;
+        let bytes = fs::read(path)?;
+        let config = toml::from_slice(&bytes)?;
         Ok(config)
     }
 
     pub fn save_to_file(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
-        let file = File::create(path)?;
-        serde_json::to_writer_pretty(file, self)?;
+        let bytes = toml::to_vec(self)?;
+        fs::write(path, bytes)?;
         Ok(())
     }
 }
