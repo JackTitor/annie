@@ -1,6 +1,6 @@
 use cc::Build;
 use vergen::TimestampKind;
-use winres::WindowsResource;
+use winresource::WindowsResource;
 
 fn main() {
     // compile mute_control
@@ -13,17 +13,15 @@ fn main() {
         .warnings_into_errors(true)
         .compile("mute_control");
 
-    // embed program icon (only on msvc toolchain)
+    // embed manifest + icon
 
-    if cfg!(target_env = "msvc") {
-        println!("cargo:rerun-if-changed=resource/annie-main.ico");
-        WindowsResource::new()
-            .set_icon("resource/annie-main.ico")
-            .set("ProductName", "Annie")
-            .set("FileDescription", "Annie")
-            .compile()
-            .unwrap();
-    }
+    println!("cargo:rerun-if-changed=resource/annie-main.ico");
+    WindowsResource::new()
+        .set_icon("resource/annie-main.ico")
+        .set("ProductName", "Annie")
+        .set("FileDescription", "Annie")
+        .compile()
+        .unwrap();
 
     // generate build info
 
