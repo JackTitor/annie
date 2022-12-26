@@ -19,6 +19,8 @@ fn main() {
         println!("cargo:rerun-if-changed=resource/annie-main.ico");
         WindowsResource::new()
             .set_icon("resource/annie-main.ico")
+            .set("ProductName", "Annie")
+            .set("FileDescription", "Annie")
             .compile()
             .unwrap();
     }
