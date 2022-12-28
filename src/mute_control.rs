@@ -9,10 +9,7 @@ use std::{
 use comedy::Win32Error;
 use log::{debug, info, warn};
 use winapi::{
-    shared::{
-        minwindef::{BOOL, DWORD, FALSE, FILETIME},
-        ntdef::HRESULT,
-    },
+    shared::minwindef::{DWORD, FALSE, FILETIME},
     um::{
         handleapi::CloseHandle,
         processthreadsapi::{GetProcessTimes, OpenProcess},
@@ -20,8 +17,15 @@ use winapi::{
     },
 };
 
-extern "C" {
-    fn SetApplicationMute(pid: DWORD, mute: BOOL) -> HRESULT;
+#[cxx::bridge]
+mod ffi {
+    unsafe extern "C++" {
+        include!("annie/src/mute_control.hpp");
+
+        // (DWORD, BOOL) -> HRESULT
+        // cxx cannot handle windows types
+        fn SetApplicationMute(pid: u32, mute: i32) -> Result<i32>;
+    }
 }
 
 #[derive(Debug)]
@@ -177,9 +181,7 @@ impl MuteProxy {
             info!("Unmuting process {}", pid);
         }
 
-        unsafe {
-            // ignore hresult - can't do anything useful with the error anyway
-            SetApplicationMute(pid, mute as _);
-        }
+        // ignore hresult - can't do anything useful with the error anyway
+        ffi::SetApplicationMute(pid, mute as _).unwrap();
     }
 }

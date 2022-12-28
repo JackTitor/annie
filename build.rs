@@ -1,17 +1,14 @@
-use cc::Build;
 use vergen::TimestampKind;
 use winresource::WindowsResource;
 
 fn main() {
     // compile mute_control
 
+    println!("cargo:rerun-if-changed=src/mute_control.rs");
     println!("cargo:rerun-if-changed=src/mute_control.hpp");
     println!("cargo:rerun-if-changed=src/mute_control.cpp");
-    Build::new()
-        .file("src/mute_control.cpp")
-        .warnings(true)
-        .warnings_into_errors(true)
-        .compile("mute_control");
+
+    cxx_build::bridge("src/mute_control.rs").compile("annie-ffi");
 
     // embed manifest + icon
 
