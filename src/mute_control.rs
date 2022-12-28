@@ -86,9 +86,8 @@ impl MuteProxy {
 
                     if aggressive && !currently_unmuting.contains(&pid) {
                         if let Some(start_time) = Self::get_process_start_time(pid) {
-                            info!("Process {} is newly opened, muting several times", pid);
-
                             if Self::get_ms_since(start_time) < Self::PROCESS_AGE_THRESHOLD_MS {
+                                info!("Process {} is newly opened, unmuting several times", pid);
                                 currently_unmuting.insert(pid);
                                 Self::unmute_followup_delayed(&sender, pid, start_time);
                             }
