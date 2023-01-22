@@ -9,7 +9,6 @@ use unicase::UniCase;
 use winapi::{
     shared::{
         minwindef::{BOOL, DWORD, FALSE, LPARAM, TRUE},
-        ntdef::WCHAR,
         windef::HWND,
     },
     um::{
@@ -17,10 +16,7 @@ use winapi::{
         processthreadsapi::OpenProcess,
         winbase::QueryFullProcessImageNameW,
         winnt::PROCESS_QUERY_INFORMATION,
-        winuser::{
-            EnumWindows, GetWindow, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible,
-            GW_OWNER,
-        },
+        winuser::{EnumWindows, GetWindow, GetWindowThreadProcessId, IsWindowVisible, GW_OWNER},
     },
 };
 
@@ -81,14 +77,6 @@ impl Window {
             // check that window is visible
             if IsWindowVisible(hwnd) == FALSE {
                 Err(WindowError::new(hwnd, "Window is not visible"))?;
-            }
-
-            // check that window has a title
-            const MAX_TITLE_SIZE: usize = 16;
-            let mut buf: [WCHAR; MAX_TITLE_SIZE] = [0; MAX_TITLE_SIZE];
-            let title_len = GetWindowTextW(hwnd, buf.as_mut_ptr(), MAX_TITLE_SIZE as i32);
-            if title_len == 0 {
-                Err(WindowError::new(hwnd, "Window has empty title"))?;
             }
 
             // get program name
