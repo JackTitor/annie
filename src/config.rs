@@ -58,7 +58,7 @@ impl AnnieConfig {
     }
 
     pub fn save_to_file(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
-        let payload = toml::to_string(self)?;
+        let payload = toml::to_string_pretty(self)?;
         fs::write(path, payload)?;
         Ok(())
     }
