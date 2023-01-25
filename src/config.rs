@@ -52,14 +52,14 @@ impl AnnieConfig {
     }
 
     pub fn load_from_file(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let bytes = fs::read(path)?;
-        let config = toml::from_slice(&bytes)?;
+        let payload = fs::read_to_string(path)?;
+        let config = toml::from_str(&payload)?;
         Ok(config)
     }
 
     pub fn save_to_file(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
-        let bytes = toml::to_vec(self)?;
-        fs::write(path, bytes)?;
+        let payload = toml::to_string(self)?;
+        fs::write(path, payload)?;
         Ok(())
     }
 }
