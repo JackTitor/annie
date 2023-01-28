@@ -35,15 +35,14 @@ const WM_STOP_LISTENING: UINT = WM_USER + 1;
 static CORE_SENDER: Lazy<Mutex<Option<CoreSender>>> = Lazy::new(|| Mutex::new(None));
 
 unsafe fn window_listener_loop() {
-    #[allow(non_snake_case)]
-    unsafe extern "system" fn WinEventProc(
-        _hWinEventHook: HWINEVENTHOOK,
-        _event: DWORD,
+    unsafe extern "system" fn window_change_callback(
+        _: HWINEVENTHOOK,
+        _: DWORD,
         hwnd: HWND,
-        _idObject: LONG,
-        _idChild: LONG,
-        _idEventThread: DWORD,
-        _dwmsEventTime: DWORD,
+        _: LONG,
+        _: LONG,
+        _: DWORD,
+        _: DWORD,
     ) {
         let Some(lock) = CORE_SENDER.lock().ok() else { return };
         if let Some(core_sender) = &*lock {
@@ -66,7 +65,7 @@ unsafe fn window_listener_loop() {
                 target_event_id,
                 target_event_id,
                 0 as _,
-                Some(WinEventProc),
+                Some(window_change_callback),
                 0,
                 0,
                 TARGET_DW_FLAGS,
