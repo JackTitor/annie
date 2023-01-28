@@ -2,6 +2,7 @@
 
 mod config;
 mod core;
+mod error;
 mod mute_control;
 mod tray_application;
 mod window;
@@ -38,7 +39,7 @@ fn main() {
     let (_tray_thread, tray_sender) = tray_application::create_tray_thread(core_sender.clone());
     let listener_thread = window_listener::WindowListenerHandle::spawn(core_sender);
 
-    AnnieCore::run_with_config(config_path, core_receiver, tray_sender, listener_thread);
+    AnnieCore::run_with_config(config_path, core_receiver, tray_sender, listener_thread).unwrap();
 
     info!("Annie exit"); // TODO: This is not reached - why?
 }

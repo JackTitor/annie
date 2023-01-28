@@ -38,6 +38,7 @@ dependencies = [
  "serde",
  "simplelog",
  "single-instance",
+ "thiserror",
  "toml 0.6.0",
  "trayicon",
  "unicase",

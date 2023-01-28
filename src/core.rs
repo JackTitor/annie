@@ -27,6 +27,7 @@ use winapi::{
 
 use crate::{
     config::AnnieConfig,
+    error::{AnnieError, AnnieResult},
     mute_control::MuteProxy,
     tray_application::{TrayEvent, TraySender},
     window::Window,
@@ -64,7 +65,7 @@ impl AnnieCore {
         receiver: Receiver<CoreMessage>,
         tray_sender: TraySender,
         listener_thread: WindowListenerHandle,
-    ) {
+    ) -> Result<(), AnnieError> {
         let mut core = AnnieCore {
             config: AnnieConfig::new_empty(),
             config_path: config_path.as_ref().into(),
@@ -76,10 +77,10 @@ impl AnnieCore {
         };
 
         if !config_path.as_ref().exists() {
-            core.save_config();
+            core.save_config()?;
         };
 
-        core.reload_config();
+        core.reload_config()?;
 
         // process messages (until ExitApplication is encountered)
         loop {
@@ -88,7 +89,7 @@ impl AnnieCore {
                 .recv()
                 .expect("all core senders closed, did a thread crash?");
 
-            if !core.process_message(message) {
+            if !core.process_message(message)? {
                 break;
             }
         }
@@ -106,6 +107,8 @@ impl AnnieCore {
             .expect("")
             .join()
             .expect("cannot join mute proxy");
+
+        Ok(())
     }
 
     fn mute_proxy(&self) -> &MuteProxy {
@@ -116,25 +119,25 @@ impl AnnieCore {
         self.config.managed_apps.contains(program_path)
     }
 
-    fn process_message(&mut self, message: CoreMessage) -> bool {
+    fn process_message(&mut self, message: CoreMessage) -> AnnieResult<bool> {
         let keep_processing = !matches!(&message, CoreMessage::ExitApplication);
 
         debug!("Core received message: {:?}", &message);
 
         match message {
             CoreMessage::NewForegroundWindow(hwnd) => self.handle_new_window(hwnd),
-            CoreMessage::SetEnabledGlobal(enabled) => self.set_enabled_global(enabled),
+            CoreMessage::SetEnabledGlobal(enabled) => self.set_enabled_global(enabled)?,
             CoreMessage::SetEnabledApp(app_name, enabled) => {
-                self.set_managed_app(app_name, enabled);
+                self.set_managed_app(app_name, enabled)?;
             }
-            CoreMessage::OpenConfig => self.open_config(),
-            CoreMessage::ReloadConfig => self.reload_config(),
+            CoreMessage::OpenConfig => self.show_config()?,
+            CoreMessage::ReloadConfig => self.reload_config()?,
             CoreMessage::ForceUnmuteAll => self.force_unmute_all(),
             CoreMessage::ShowAbout => self.show_about(),
             CoreMessage::ExitApplication => self.exit_app(),
         }
 
-        keep_processing
+        Ok(keep_processing)
     }
 
     fn handle_new_window(&mut self, hwnd: usize) {
@@ -196,22 +199,24 @@ impl AnnieCore {
         self.foreground_window = Some(window_new);
     }
 
-    fn set_enabled_global(&mut self, enabled: bool) {
+    fn set_enabled_global(&mut self, enabled: bool) -> AnnieResult<()> {
         if enabled == self.config.enabled {
-            return;
+            return Ok(());
         }
 
         self.config.enabled = enabled;
-        self.save_config();
+        self.save_config()?;
 
         if enabled {
             self.update_mute_status_all();
         } else {
             self.force_unmute_all();
         }
+
+        Ok(())
     }
 
-    fn set_managed_app(&mut self, program_path: ProgramPath, managed: bool) {
+    fn set_managed_app(&mut self, program_path: ProgramPath, managed: bool) -> AnnieResult<()> {
         if managed && self.config.managed_apps.insert(program_path.clone()) {
             // update mute status on all processes with this path
             info!("Added {} to managed apps", &program_path);
@@ -233,28 +238,43 @@ impl AnnieCore {
             }
         }
 
-        self.save_config();
+        self.save_config()?;
+
+        Ok(())
     }
 
-    fn open_config(&self) {
+    fn show_config(&self) -> AnnieResult<()> {
         // explorer returns exit code 1 for some reason
         Command::new("explorer")
             .arg(format!("/select,{}", self.config_path.display()))
             .output()
-            .expect("cannot open config file in explorer");
+            .map_err(|source| AnnieError::ShowConfigError {
+                source,
+                path: self.config_path.clone(),
+            })?;
+
+        Ok(())
     }
 
-    fn save_config(&self) {
+    fn save_config(&self) -> AnnieResult<()> {
         self.config
             .save_to_file(&self.config_path)
-            .expect("cannot save config file");
+            .map_err(|source| AnnieError::SaveConfigError {
+                source,
+                path: self.config_path.clone(),
+            })?;
         info!("Updated config file");
         debug!("{:?}", self.config);
+        Ok(())
     }
 
-    fn reload_config(&mut self) {
-        self.config =
-            AnnieConfig::load_from_file(&self.config_path).expect("cannot read config from file");
+    fn reload_config(&mut self) -> AnnieResult<()> {
+        self.config = AnnieConfig::load_from_file(&self.config_path).map_err(|source| {
+            AnnieError::LoadConfigError {
+                source,
+                path: self.config_path.clone(),
+            }
+        })?;
 
         self.force_unmute_all();
 
@@ -269,6 +289,7 @@ impl AnnieCore {
 
         info!("Loaded config from file");
         debug!("{:?}", self.config);
+        Ok(())
     }
 
     fn force_unmute_all(&self) {
