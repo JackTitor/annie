@@ -1,0 +1,14 @@
+# Annie config file
+
+# Managed apps can be added or removed using the "Recent apps" context menu action.
+# If manual edits are required, after saving the file, reload the configuration using the "Reload config from file" context menu action.
+# This will prevent annie from overwriting this file with the program's internal state.
+
+# Whether to do any muting/unmuting. Setting this to false is equivalent to the annie process not running.
+enabled = {enabled}
+
+# Programs managed by annie. Only programs specified here are automatically muted/unmuted by annie.
+managed_apps = {managed_apps}
+
+# Maximum number of items to be shown in the "Recent apps" menu.
+max_recent_apps = {max_recent_apps}

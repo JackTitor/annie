@@ -8,18 +8,6 @@ use unicase::UniCase;
 
 use crate::core::ProgramPath;
 
-const HEADER: &str = "\
-    Annie config file\n\
-    \n\
-    Managed apps can be added or removed using the \"Recent apps\" context menu action.\n\
-    If manual edits are required, after saving the file, reload the configuration using the \"Reload config from file\" context menu action.\n\
-    This will prevent annie from overwriting this file with the program's internal state.\
-";
-const DESC_ENABLED: &str = "Whether to do any muting/unmuting. Setting this to false is equivalent to the annie process not running.";
-const DESC_MANAGED_APPS: &str = "Programs managed by annie. Only programs specified here are automatically muted/unmuted by annie.";
-const DESC_MAX_RECENT_APPS: &str =
-    "Maximum number of items to be shown in the \"Recent apps\" menu.";
-
 #[derive(Clone, Deserialize, Debug)]
 pub struct AnnieConfig {
     pub enabled: bool,
@@ -62,31 +50,16 @@ fn deserialize_managed_apps<'a, D: Deserializer<'a>>(
 }
 
 fn serialize_toml_config(config: &AnnieConfig) -> anyhow::Result<String> {
-    fn write_comment(writer: &mut String, comment_text: &str) -> anyhow::Result<()> {
-        for line in comment_text.split('\n') {
-            if line.is_empty() {
-                writeln!(writer)?
-            } else {
-                writeln!(writer, "# {}", line)?
-            }
-        }
-
-        Ok(())
-    }
-
-    fn write_field<V: Serialize>(writer: &mut String, key: &str, value: &V) -> anyhow::Result<()> {
-        write!(writer, "{key} = ")?;
+    fn write_field<V: Serialize>(writer: &mut String, value: &V) -> anyhow::Result<()> {
         Serialize::serialize(value, ValueSerializer::new(writer))?;
-        writeln!(writer)?;
         Ok(())
     }
 
     fn write_array_field<V: Serialize>(
         writer: &mut String,
-        key: &str,
         values: impl IntoIterator<Item = V>,
     ) -> anyhow::Result<()> {
-        writeln!(writer, "{key} = [")?;
+        writeln!(writer, "[")?;
 
         for value in values.into_iter() {
             write!(writer, "    ")?;
@@ -94,11 +67,9 @@ fn serialize_toml_config(config: &AnnieConfig) -> anyhow::Result<String> {
             writeln!(writer, ",")?;
         }
 
-        writeln!(writer, "]")?;
+        write!(writer, "]")?;
         Ok(())
     }
-
-    let mut writer = String::new();
 
     let managed_apps = config
         .managed_apps
@@ -107,19 +78,21 @@ fn serialize_toml_config(config: &AnnieConfig) -> anyhow::Result<String> {
         .map(|program_path| program_path.as_str())
         .collect_vec();
 
-    write_comment(&mut writer, HEADER)?;
+    let mut enabled_seri = String::new();
+    write_field(&mut enabled_seri, &config.enabled)?;
 
-    writeln!(&mut writer)?;
-    write_comment(&mut writer, DESC_ENABLED)?;
-    write_field(&mut writer, "enabled", &config.enabled)?;
+    let mut managed_apps_seri = String::new();
+    write_array_field(&mut managed_apps_seri, &managed_apps)?;
 
-    writeln!(&mut writer)?;
-    write_comment(&mut writer, DESC_MANAGED_APPS)?;
-    write_array_field(&mut writer, "managed_apps", &managed_apps)?;
+    let mut max_recent_apps_seri = String::new();
+    write_field(&mut max_recent_apps_seri, &config.max_recent_apps)?;
 
-    writeln!(&mut writer)?;
-    write_comment(&mut writer, DESC_MAX_RECENT_APPS)?;
-    write_field(&mut writer, "max_recent_apps", &config.max_recent_apps)?;
+    let serialized = format!(
+        include_str!("../resource/config-template"),
+        enabled = enabled_seri,
+        managed_apps = managed_apps_seri,
+        max_recent_apps = max_recent_apps_seri,
+    );
 
-    Ok(writer)
+    Ok(serialized)
 }
