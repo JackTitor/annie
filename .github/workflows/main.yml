@@ -1,22 +1,22 @@
-name: Build Annie
+name: Build annie
 run-name: ${{ inputs.ref && format('Manual run ({0}, {1}, {2})', inputs.ref, inputs.cargo-profile, inputs.compress-exe == 'none' && 'uncompressed' || 'compressed') }}
 
 on:
   pull_request:
     branches:
-      - "*"
+      - master
   push:
     branches:
       - master
   workflow_dispatch:
     inputs:
       ref:
-        description: "Code version"
+        description: Code version
         required: true
         type: string
         default: master
       cargo-profile:
-        description: "Cargo profile"
+        description: Cargo profile
         required: true
         type: choice
         default: release
@@ -25,7 +25,7 @@ on:
           - release-no-lto
           - release-unoptimized
       compress-exe:
-        description: "Compression"
+        description: Compression
         required: true
         type: choice
         default: none
@@ -43,107 +43,83 @@ jobs:
       run:
         shell: bash
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
-        target:
+        toolchain:
           - x86_64-pc-windows-msvc
           - x86_64-pc-windows-gnu
     steps:
-      - name: Parse inputs
+      - name: Process inputs
         run: |
-          echo "REF=${{ inputs.ref || github.ref }}" >> $GITHUB_ENV
-          echo "CARGO_PROFILE=${{ inputs.cargo-profile || 'release' }}" >> $GITHUB_ENV
-          echo "COMPRESS_EXE=${{ inputs.compress-exe || 'none' }}" >> $GITHUB_ENV
+          echo ANNIE_REF=${{ inputs.ref || github.ref }} >> $GITHUB_ENV
+          echo CARGO_PROFILE=${{ inputs.cargo-profile || 'release' }} >> $GITHUB_ENV
+          echo COMPRESS_EXE=${{ inputs.compress-exe || 'none' }} >> $GITHUB_ENV
 
-      - name: Install sccache
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG=$(gh --repo mozilla/sccache release list | grep Latest | awk '{print $(NF - 1)}')
-          gh --repo mozilla/sccache release download --pattern 'sccache-*-x86_64-pc-windows-msvc.zip' $TAG
-          unzip sccache-*.zip
-          mkdir -p ~/bin
-          mv $(find -name sccache.exe) ~/bin/
-          rm -rf sccache*
-          echo "SCCACHE_DIR=$(cygpath --windows ~/.sccache)" >> $GITHUB_ENV
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-          echo "~/bin" >> $GITHUB_PATH
-
-      - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-          ref: ${{ env.REF }}
-
-      - name: Set environment variables
-        run: |
-          echo "~/.cargo/bin" >> $GITHUB_PATH
-          echo "SHA=$(git rev-parse ${{ env.REF }})" >> $GITHUB_ENV
-
-      - name: Cache cargo registry, git trees, installed apps, and sccache
+      - name: Cache rustup, cargo and sccache
         uses: actions/cache@v3
         with:
-          key: cargo-global-${{ matrix.target }}
+          key: rustup-cargo-sccache-${{ matrix.toolchain }}
           path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            ~/.cargo/.crates.toml
-            ~/.cargo/.crates2.json
-            ~/.cargo/bin/cargo-cache.exe
+            ~/.rustup
+            ~/.cargo
             ~/.sccache
 
-      - name: Install Rust via rustup
+      - name: Install Rust toolchain
         run: |
-          curl https://win.rustup.rs/ --silent --output rustup-init.exe
-          ./rustup-init.exe -y --default-host=x86_64-pc-windows-msvc --profile=minimal
-          rm rustup-init.exe
+          rustup install --profile minimal stable
+          rustup install --profile minimal stable-${{ matrix.toolchain }}
 
-      - name: Update stable toolchain
+      - name: Install workflow dependencies
         run: |
-          rustup update stable-${{ matrix.target }}
+          cargo install cargo-quickinstall
+          cargo quickinstall --no-fallback sccache
+          cargo quickinstall --no-fallback cargo-cache
+          echo SCCACHE_DIR=$(cygpath --windows ~/.sccache) >> $GITHUB_ENV
+          echo RUSTC_WRAPPER=sccache >> $GITHUB_ENV
 
-      - name: Get rust toolchain SHA
+      - name: Checkout annie
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ env.ANNIE_REF }}
+
+      - name: Retrieve annie version information
         run: |
-          echo "RUST_SHA=$(rustc -Vv | grep commit-hash | awk '{print $2}')" >> $GITHUB_ENV
+          echo ANNIE_SHA=$(git rev-parse ${{ env.ANNIE_REF }}) >> $GITHUB_ENV
+          echo ANNIE_SEMVER=$(cat Cargo.toml | sed -rn 's/^version = "(.*?)"/\1/p') >> $GITHUB_ENV
 
-      - name: Cache cargo build folder
+      - name: Cache annie build artifacts
         uses: actions/cache@v3
         with:
-          key: cargo-target-dir-${{ matrix.target }}-${{ env.CARGO_PROFILE }}-${{ env.SHA }}
+          key: annie-build-${{ matrix.toolchain }}-${{ env.CARGO_PROFILE }}-${{ env.ANNIE_SHA }}
           restore-keys: |
-            cargo-target-dir-${{ matrix.target }}-${{ env.CARGO_PROFILE }}
-            cargo-target-dir-${{ matrix.target }}
+            annie-build-${{ matrix.toolchain }}-${{ env.CARGO_PROFILE }}
+            annie-build-${{ matrix.toolchain }}
           path: target
 
-      - name: Run a full build
+      - name: Build annie
         run: |
-          cargo +stable-${{ matrix.target }} build --profile=${{ env.CARGO_PROFILE }}
+          cargo +stable-${{ matrix.toolchain }} build --profile=${{ env.CARGO_PROFILE }}
           cp target/${{ env.CARGO_PROFILE }}/annie-am.exe ~/annie-am.exe
+
+      - name: Clean up output for CI cache
+        run: |
+          cargo-cache
 
       - name: Compress executable
         if: ${{ env.COMPRESS_EXE == 'upx' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG=$(gh --repo upx/upx release list | grep Latest | awk '{print $(NF - 1)}')
-          gh --repo upx/upx release download --pattern 'upx-*-win64.zip' $TAG
-          unzip upx-*-win64.zip
-          $(find -name upx.exe) $(cygpath --windows ~/annie-am.exe)
+          UPX_TAG=$(gh --repo upx/upx release list | awk '$2 == Latest {print $3}')
+          gh --repo upx/upx release download --pattern 'upx-*-win64.zip' --output upx.zip $UPX_TAG
+          unzip upx.zip
+          upx-*/upx ~/annie-am.exe
           rm -rf upx*
 
-      - name: Get package semver
-        run: |
-          cat Cargo.toml | sed -rn 's/^\s*version\s*=\s*"(.*?)"/SEMVER=\1/p' >> $GITHUB_ENV
-
-      - name: Upload annie executable
+      - name: Upload annie to artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: annie-${{ env.SEMVER }}-${{ matrix.target }}-${{ env.CARGO_PROFILE }}${{ env.COMPRESS_EXE != 'none' && '-compressed' || '' }}
+          name: annie-${{ env.ANNIE_SEMVER }}-${{ matrix.toolchain }}-${{ env.CARGO_PROFILE }}${{ env.COMPRESS_EXE != 'none' && '-compressed' || '' }}
           path: |
             ~/annie-am.exe
-          retention-days: 7
-
-      - name: Clear cargo cache
-        run: |
-          cargo install cargo-cache --no-default-features --features ci-autoclean
-          cargo-cache
+          retention-days: 14
