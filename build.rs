@@ -1,5 +1,5 @@
 use cc::Build;
-use vergen::TimestampKind;
+use vergen::{ShaKind, TimestampKind};
 use winresource::WindowsResource;
 
 fn main() {
@@ -26,6 +26,7 @@ fn main() {
     // generate build info
 
     let mut config = vergen::Config::default();
-    *config.build_mut().kind_mut() = TimestampKind::DateOnly;
+    *config.git_mut().sha_kind_mut() = ShaKind::Short;
+    *config.git_mut().commit_timestamp_kind_mut() = TimestampKind::DateOnly;
     vergen::vergen(config).unwrap();
 }

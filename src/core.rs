@@ -3,13 +3,11 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
     sync::mpsc::{Receiver, Sender},
-    thread,
 };
 
 use flexstr::SharedStr;
 use itertools::Itertools;
 use log::{debug, error, info};
-use msgbox::IconType;
 use unicase::UniCase;
 use winapi::{
     shared::{minwindef::DWORD, windef::HWND},
@@ -42,7 +40,6 @@ pub enum CoreMessage {
     OpenConfig,
     ReloadConfig,
     ForceUnmuteAll,
-    ShowAbout,
     ExitApplication,
 }
 
@@ -133,7 +130,6 @@ impl AnnieCore {
             CoreMessage::OpenConfig => self.show_config()?,
             CoreMessage::ReloadConfig => self.reload_config()?,
             CoreMessage::ForceUnmuteAll => self.force_unmute_all(),
-            CoreMessage::ShowAbout => self.show_about(),
             CoreMessage::ExitApplication => self.exit_app(),
         }
 
@@ -301,20 +297,6 @@ impl AnnieCore {
         for pid in pids {
             self.mute_proxy().unmute(pid, false)
         }
-    }
-
-    fn show_about(&self) {
-        thread::spawn(|| {
-            let body = format!(
-                "Annie Automuter\n\nVersion: {}\nPlatform: {}\nBuild date: {}\nProfile: {}",
-                env!("VERGEN_BUILD_SEMVER"),
-                env!("VERGEN_CARGO_TARGET_TRIPLE"),
-                env!("VERGEN_BUILD_DATE"),
-                env!("VERGEN_CARGO_PROFILE")
-            );
-            msgbox::create("About Annie", &body, IconType::Info)
-                .expect("cannot create message box");
-        });
     }
 
     fn exit_app(&self) {}

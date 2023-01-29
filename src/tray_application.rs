@@ -10,6 +10,7 @@ use std::{
 use itertools::Itertools;
 use log::{debug, error, info};
 
+use msgbox::IconType;
 use winit::{
     event::Event,
     event_loop::{ControlFlow, EventLoop, EventLoopProxy},
@@ -124,6 +125,21 @@ fn get_app_name(app_path: &str) -> Cow<str> {
 
 fn get_app_tray_text(app_path: &str) -> String {
     format!("{} ({})", get_app_name(app_path), app_path)
+}
+
+fn show_about_message() {
+    thread::spawn(|| {
+        let body = format!(
+            "Annie Automuter\n\nVersion: {}\nBranch: {}\nCommit: {}\nCommit date: {}\nPlatform: {}\nProfile: {}",
+            env!("VERGEN_BUILD_SEMVER"),
+            env!("VERGEN_GIT_BRANCH"),
+            env!("VERGEN_GIT_SHA_SHORT"),
+            env!("VERGEN_GIT_COMMIT_DATE"),
+            env!("VERGEN_CARGO_TARGET_TRIPLE"),
+            env!("VERGEN_CARGO_PROFILE")
+        );
+        msgbox::create("About Annie", &body, IconType::Info).expect("cannot create message box");
+    });
 }
 
 pub fn create_tray_thread(core_sender: CoreSender) -> (JoinHandle<()>, TraySender) {
@@ -243,10 +259,7 @@ pub fn create_tray_thread(core_sender: CoreSender) -> (JoinHandle<()>, TraySende
                             .ok();
                     }
                     TrayEvent::ShowAbout => {
-                        core_sender
-                            .send(CoreMessage::ShowAbout)
-                            .map_err(|err| error!("Cannot send to core: {}", err))
-                            .ok();
+                        show_about_message();
                     }
                     TrayEvent::Exit => {
                         *control_flow = ControlFlow::Exit;
