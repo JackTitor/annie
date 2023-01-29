@@ -2,4 +2,4 @@
 
 #include <windef.h>
 
-extern "C" HRESULT SetApplicationMute(DWORD pid, BOOL mute);
+extern "C" BOOL SetProcessMute(DWORD dwPID, BOOL bMute);
