@@ -9,10 +9,7 @@ use std::{
 use comedy::Win32Error;
 use log::{debug, info, warn};
 use winapi::{
-    shared::{
-        minwindef::{BOOL, DWORD, FALSE, FILETIME},
-        ntdef::HRESULT,
-    },
+    shared::minwindef::{BOOL, DWORD, FALSE, FILETIME},
     um::{
         handleapi::CloseHandle,
         processthreadsapi::{GetProcessTimes, OpenProcess},
@@ -21,7 +18,7 @@ use winapi::{
 };
 
 extern "C" {
-    fn SetApplicationMute(pid: DWORD, mute: BOOL) -> HRESULT;
+    fn SetProcessMute(dwPID: DWORD, bMute: BOOL) -> BOOL;
 }
 
 #[derive(Debug)]
@@ -179,7 +176,7 @@ impl MuteProxy {
 
         unsafe {
             // ignore hresult - can't do anything useful with the error anyway
-            SetApplicationMute(pid, mute as _);
+            SetProcessMute(pid, mute as _);
         }
     }
 }

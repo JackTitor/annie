@@ -14,8 +14,7 @@ use winapi::{
         windef::{HWINEVENTHOOK, HWND},
     },
     um::{
-        combaseapi::CoUninitialize,
-        objbase::CoInitialize,
+        combaseapi::{CoInitializeEx, CoUninitialize},
         processthreadsapi::GetThreadId,
         winuser::{
             DispatchMessageW, GetMessageW, PostQuitMessage, PostThreadMessageW, SetWinEventHook,
@@ -56,7 +55,7 @@ unsafe fn window_listener_loop() {
 
     // set up hooks
 
-    CoInitialize(0 as _);
+    CoInitializeEx(0 as _, 0);
 
     let hooks = TARGET_EVENTS
         .iter()
